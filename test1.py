@@ -4,6 +4,9 @@ import os
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import pdist
 from math import radians, sin, cos, asin, sqrt
+import folium
+import matplotlib.cm as cm
+import matplotlib.colors as colors
 
 # -----------------------------
 # 설정
@@ -13,8 +16,9 @@ files = [
     "clean_lodgement.csv"
 ]
 
-max_distance = 2000  # 군집 내 최대 거리 (m)
-output_file = "tourism_clusters_hierarchical_2km.csv"
+max_distance = 800  # 군집 내 최대 거리 (m)
+output_file = "tourism_clusters_hierarchical_final_2km.csv"
+output_map = "tourism_clusters_hierarchical_final_2km_map.html"
 
 # -----------------------------
 # 1️⃣ 여러 CSV 통합
@@ -81,7 +85,7 @@ Z = linkage(dist_matrix, method="complete")
 
 # 2km 이하의 거리 제약으로 군집 자르기
 labels = fcluster(Z, t=max_distance, criterion="distance")
-data["cluster_id"] = labels
+data["cluster_id"] = labels.astype(int)
 
 print(f"✅ 총 군집 수: {len(set(labels))}")
 
@@ -93,24 +97,99 @@ cluster_summary = (
     .agg(
         total_places=("name", "count"),
         avg_review_rate=("review_rate", "mean"),
-        num_categories=("category", "nunique"),
         top_categories=("category", lambda x: x.value_counts().head(3).index.tolist())
     )
     .reset_index()
 )
 
-# -----------------------------
-# 5️⃣ 결과 저장
-# -----------------------------
-# cluster_id 타입 통일
-data["cluster_id"] = data["cluster_id"].astype(int)
-cluster_summary["cluster_id"] = cluster_summary["cluster_id"].astype(int)
+# 카테고리 상위 3개를 각각 분리
+for i in range(3):
+    cluster_summary[f"category_rank_{i+1}"] = cluster_summary["top_categories"].apply(
+        lambda x: x[i] if len(x) > i else np.nan
+    )
+cluster_summary = cluster_summary.drop(columns=["top_categories"])
 
-# 병합
+# -----------------------------
+# 5️⃣ 결과 병합 및 정리
+# -----------------------------
 result = data.merge(cluster_summary, on="cluster_id", how="left")
-result = data.merge(cluster_summary, on="cluster_id", how="left")
+
+# 필요한 컬럼 순서로 정렬
+result = result[
+    [
+        "name",
+        "latitude",
+        "longitude",
+        "category",
+        "cluster_id",
+        "total_places",
+        "avg_review_rate",
+        "category_rank_1",
+        "category_rank_2",
+        "category_rank_3",
+    ]
+]
+
+# -----------------------------
+# 6️⃣ 지도 시각화 (folium)
+# -----------------------------
+print("🗺️ 지도 시각화 중...")
+
+# 지도 중심은 전체 평균 좌표로 설정
+center_lat, center_lon = result["latitude"].mean(), result["longitude"].mean()
+m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles="cartodb positron")
+
+# 색상 팔레트 설정
+unique_clusters = sorted(result["cluster_id"].unique())
+colormap = cm.get_cmap("tab20", len(unique_clusters))
+norm = colors.Normalize(vmin=0, vmax=len(unique_clusters) - 1)
+
+# 군집별 시각화
+for i, cluster_id in enumerate(unique_clusters):
+    cluster_data = result[result["cluster_id"] == cluster_id]
+    color = colors.to_hex(colormap(norm(i)))
+
+    # 군집 중심점 계산
+    center_lat = cluster_data["latitude"].mean()
+    center_lon = cluster_data["longitude"].mean()
+
+    # 군집 내 장소 마커 표시
+    for _, row in cluster_data.iterrows():
+        popup_html = f"""
+        <b>{row['name']}</b><br>
+        📍 <b>Category:</b> {row['category']}<br>
+        🏷️ <b>Cluster:</b> {row['cluster_id']}<br>
+        ⭐ <b>Review Rate:</b> {row['avg_review_rate']:.2f}<br>
+        👥 <b>Total Places:</b> {row['total_places']}<br>
+        🥇 {row['category_rank_1'] or '-'}, 🥈 {row['category_rank_2'] or '-'}, 🥉 {row['category_rank_3'] or '-'}
+        """
+        folium.CircleMarker(
+            location=[row["latitude"], row["longitude"]],
+            radius=4,
+            color=color,
+            fill=True,
+            fill_opacity=0.9,
+            popup=folium.Popup(popup_html, max_width=250)
+        ).add_to(m)
+
+    # 군집 내 모든 점을 선으로 연결
+    coords = list(zip(cluster_data["latitude"], cluster_data["longitude"]))
+    if len(coords) > 1:
+        folium.PolyLine(
+            locations=coords,
+            color=color,
+            weight=2,
+            opacity=0.5
+        ).add_to(m)
+
+print(f"✅ 총 {len(unique_clusters)}개 군집 시각화 완료")
+
+# -----------------------------
+# 7️⃣ 저장
+# -----------------------------
 result.to_csv(output_file, index=False, encoding="utf-8-sig")
+m.save(output_map)
 
-print(f"\n✅ 군집 생성 완료 및 저장: {output_file}")
-print(f"총 군집 수: {len(cluster_summary)}")
-print(result.head(10))
+print(f"\n✅ 군집 생성 및 지도 저장 완료!")
+print(f"📄 데이터: {output_file}")
+print(f"🗺️ 지도: {output_map}")
