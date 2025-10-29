@@ -12,7 +12,7 @@ files = [
     "clean_lodgement.csv"
 ]
 
-eps_meters = 1000  # 군집 반경 (단위: m)
+eps_meters = 2000  # 군집 반경 (단위: m)
 min_samples = 3    # 최소 군집 크기
 
 output_file = "tourism_clusters.csv"
@@ -20,11 +20,7 @@ output_file = "tourism_clusters.csv"
 # -----------------------------
 # 1️⃣ 여러 CSV 통합
 # -----------------------------
-dfs = []
-for f in files:
-    df = pd.read_csv(f)
-    df['category'] = f.split("_")[1]  # 파일명 기준 카테고리 추정 (예: restaurant, lodgement)
-    dfs.append(df)
+
 
 data = pd.concat(dfs, ignore_index=True)
 print(f"✅ 통합된 데이터 크기: {data.shape}")
