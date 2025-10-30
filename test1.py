@@ -17,8 +17,8 @@ files = [
 ]
 
 max_distance = 800  # 군집 내 최대 거리 (m)
-output_file = "tourism_clusters_hierarchical_final_2km.csv"
-output_map = "tourism_clusters_hierarchical_final_2km_map.html"
+output_file = "tourism_clusters_hierarchical_final_800km.csv"
+output_map = "tourism_clusters_hierarchical_final_800km_map.html"
 
 # -----------------------------
 # 1️⃣ 여러 CSV 통합
