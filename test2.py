@@ -58,13 +58,13 @@ print(f"✅ 서울 내부 군집만 유지: {len(clusters)}개")
 # -----------------------------
 # 4️⃣ 도로망 불러오기 (drive_service)
 # -----------------------------
-north = SEOUL_BOUND["north"] + 0.01
-south = SEOUL_BOUND["south"] - 0.01
-east = SEOUL_BOUND["east"] + 0.01
-west = SEOUL_BOUND["west"] - 0.01
+north = data["latitude"].max() + 0.01
+south = data["latitude"].min() - 0.01
+east = data["longitude"].max() + 0.01
+west = data["longitude"].min() - 0.01
 
-print("🛣️ 도로망 불러오는 중...")
-G = ox.graph_from_bbox((north, south, east, west), network_type="drive_service", simplify=True)
+print("🛣️ 도로망 불러오는 중 (bbox 기준)...")
+G = ox.graph_from_bbox(north, south, east, west, network_type="drive")
 print(f"✅ 도로망 노드 수: {len(G.nodes)}, 엣지 수: {len(G.edges)}")
 
 # -----------------------------
